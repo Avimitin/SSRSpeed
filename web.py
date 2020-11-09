@@ -86,6 +86,8 @@ def index():
 
 @app.route("/getversion",methods=["GET"])
 def getVersion():
+	if not isAllow(ip=request.remote_addr):
+		return "unauthorized"
 	return json.dumps(
 		{
 			"main":config["VERSION"],
@@ -95,11 +97,15 @@ def getVersion():
 
 @app.route("/status",methods=["GET"])
 def status():
+	if not isAllow(ip=request.remote_addr):
+		return "unauthorized"
 	return sc.web_get_status()
 
 @app.route("/readsubscriptions",methods=["POST"])
 def readSubscriptions():
 	if (request.method == "POST"):
+		if not isAllow(token=request.form.get("token"), ip=request.remote_addr):
+			return "Unauthorized"
 		data = getPostData()
 		if (sc.web_get_status() == "running"):
 			return 'running'
@@ -114,6 +120,8 @@ def check_file_allowed(filename):
 
 @app.route("/readfileconfig", methods=["POST"])
 def readFileConfig():
+	if not isAllow(token=request.form.get("token"), ip=request.remote_addr):
+		return "Unauthorized"
 	if request.method == "POST":
 		if (sc.web_get_status() == "running"):
 			return 'running'
@@ -135,6 +143,8 @@ def readFileConfig():
 
 @app.route("/getcolors",methods=["GET"])
 def getColors():
+	if not isAllow(ip=request.remote_addr):
+		return "Unauthorized"
 	return json.dumps(sc.web_get_colors())
 
 @app.route('/start',methods=["POST"])
@@ -142,6 +152,8 @@ def startTest():
 	if (request.method == "POST"):
 		data = getPostData()
 	#	return "SUCCESS"
+		if not isAllow(token=data.get("token"), ip=request.remote_addr):
+			return "Unauthorized"
 		if (sc.web_get_status() == "running"):
 			return 'running'
 		configs = data.get("configs",[])
@@ -170,7 +182,34 @@ def startTest():
 
 @app.route('/getresults')
 def getResults():
+	if not isAllow(ip=request.remote_addr):
+		return "Unauthorized"
 	return json.dumps(sc.web_get_results())
+
+
+Secret = ""
+white_list = []
+
+
+def LoadSecret():
+	if not os.path.exists("./secret.json"):
+		print("running on unprotected mode")
+		return
+	global Secret, white_list
+	with open("./secret.json", "r", encoding="utf-8") as file:
+		tokenJson = json.load(file)
+		Secret = tokenJson.get("token")
+		white_list = tokenJson.get("whitelist")
+
+
+def isAllow(token=None, ip=None):
+	if token and Secret and token == Secret:
+		return True
+	# if user don't set up any protect way just pass true
+	if not white_list or (ip and ip in white_list):
+		return True
+	return False
+
 
 if (__name__ == "__main__"):
 	pfInfo = check_platform()
@@ -207,6 +246,8 @@ if (__name__ == "__main__"):
 			item.setLevel(logging.INFO)
 			item.addHandler(fileHandler)
 			item.addHandler(consoleHandler)
+
+	LoadSecret()
 
 	logger.info("SSRSpeed {}, Web Api Version {}".format(config["VERSION"], config["WEB_API_VERSION"]))
 
